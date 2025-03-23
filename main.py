@@ -92,10 +92,12 @@ def validate_request(ip):
             if check_russian_as(regional_info):
                 logger.info(f"IP {ip} принадлежит российской AS:")
                 logger.info(regional_info)
-                return 1
+                regional_info['RU'] = True
+                return regional_info
             else:
                 logger.info(f"IP {ip} не принадлежит российской AS.")
-                return -1
+                regional_info['RU'] = False
+                return regional_info
         else:
             logger.error("Не удалось получить данные о AS.")
             return -2
@@ -111,3 +113,5 @@ if __name__ == "__main__":
     print(validate_request("82.98.86.175"))
 
     print(validate_request("217.69.128.44"))
+
+    validate_request("77.88.55.88")
