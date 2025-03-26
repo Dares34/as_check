@@ -7,8 +7,8 @@ from pprint import pprint
 logger = logging.getLogger(__name__)
 
 logging.basicConfig(
-    filename="app.log",
     filemode="a",
+    filename="app.log",
     level=logging.INFO,
     format="%(asctime)s - [%(levelname)s] - %(name)s - (%(filename)s:%(lineno)d) - %(message)s",
     datefmt="%Y-%m-%d %H:%M:%S",
@@ -27,8 +27,8 @@ RADB_WHOIS = "whois.radb.net"
 def data_processing(
     response, server_type, data={"AS": None, "AS_name": None, "country": None}
 ):
-    print(server_type)
-    pprint(response)
+    # print(server_type)
+    # pprint(response)
     for line in response.splitlines():
         line = line.strip()
         if not line or line.startswith(("%", "#")):
@@ -40,14 +40,14 @@ def data_processing(
         key, value = line.split(":", 1)
         key = key.strip().lower()
         value = value.strip()
-
+        # print(key, value)
         if server_type == "radb":
             if key == "origin":
-                data["AS"] = value.split()[-1]
-            elif key == "descr" and not data.get("AS_name"):
+                data["AS"] = value.split()[-1][2:]
+            elif key == "descr" and data.get("AS_name"):
                 data["AS_name"] = value
-            elif key == "country":
-                data["country"] = value.upper()
+            elif key == "country" and not data["country"]:
+                data["country"] = value.upper().split()[0]
         else:
             if key in ["org-name", "as-name", "asname"]:
                 data["AS_name"] = value
@@ -57,14 +57,14 @@ def data_processing(
                 data["AS_name"] = value
 
             if key in ["origin", "originas", "aut-num"]:
-                data["AS"] = value.split()[-1]
+                data["AS"] = value.split()[-1][2:]
             elif key in ["country", "country-code"]:
-                data["country"] = value.upper()
-    print(data)
+                data["country"] = value.upper().split()[0]
+    # print(data)
     return data if data["AS"] else False
 
 
-def get_whois(ip, server):
+def get_whois(ip, server, data=None):
     try:
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             s.settimeout(10)
@@ -98,41 +98,39 @@ def validate_request(ip):
         regional_server = REGIONAL_WHOIS["ripe"]
         logger.warning("Использования сервера ripe")
 
-    time.sleep(1)
     regional_info = get_whois(ip, regional_server)
-
-    if not regional_info:
-        time.sleep(1)
-        regional_info = get_whois(ip, RADB_WHOIS)
-        logger.info("Falling back to RADB")
+    try:
+        regional_info = get_whois(ip, RADB_WHOIS, regional_info)
+    except Exception as e:
+        logger.info(f"ошибка получения данных с radb {e}")
 
     if regional_info and regional_info.get("AS"):
         if regional_info.get("country") == "RU":
             logger.info(
-                f"Russian AS found: AS{regional_info['AS']} ({regional_info.get('AS_name')})"
+                f"русская: AS{regional_info['AS']} ({regional_info.get('AS_name')})"
             )
             regional_info["RU"] = True
             return regional_info
         else:
             logger.info(
-                f"Foreign AS found: AS{regional_info['AS']} ({regional_info.get('country')})"
+                f"не русская: AS{regional_info['AS']} ({regional_info.get('country')})"
             )
             regional_info["RU"] = False
             return regional_info
     else:
-        logger.error("No AS information found")
+        logger.error("нет информации по AS")
         return -2
 
 
 if __name__ == "__main__":
     test_ips = [
         # "82.98.86.175",
-        # "217.69.128.44",
-        "64.233.160.0",  # Google (US)
+        "217.69.128.44",
+        # "64.233.160.0",  # Google (US)
         # "94.103.153.133",  # Yandex (RU)
         # "142.251.45.78",  # Google (US)
         # "84.252.160.0",
     ]
 
-    for ip in test_ips:
-        print(f"Checking {ip}: {validate_request(ip)}")
+    # for ip in test_ips:
+    #     print(f"Checking {ip}: {validate_request(ip)}")
